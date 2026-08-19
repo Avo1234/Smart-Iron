@@ -1,88 +1,107 @@
-# Smart Iron System (Original Implementation) 🛠️🔥
+# Smart Iron
 
-This repository contains the original baseline implementation of the **Smart Iron Safety System**, consisting of an **ESP32 Arduino Firmware** sketch driving physical sensors/displays and a companion **Flutter Mobile App**.
+Smart Iron is ESP32 firmware for a safer, temperature-aware electric iron. It provides fabric-specific temperature presets through a touchscreen, controls the heating element with a relay, monitors a PT100 temperature sensor, and automatically disables heating when the iron overheats or remains inactive.
 
----
+## Features
 
-## 📁 System Architecture Overview
+- Touchscreen interface showing current and target temperatures
+- Presets for Casual, Kente, Suits, Jeans, and Bedding
+- Closed-loop heater control with a PT100 sensor and MAX31865 amplifier
+- Fabric-specific over-temperature protection
+- Automatic shutdown after 30 seconds without touchscreen activity
+- Audible warning after 20 seconds of inactivity
+- MPU6050 motion sensing
+- Status and heating LEDs
+- Buzzer feedback and shutdown alerts
+- Touch-to-resume operation after an automatic shutdown
+
+## Hardware
+
+- ESP32 development board
+- ILI9341 TFT display
+- XPT2046 touchscreen controller
+- PT100 RTD temperature sensor
+- MAX31865 RTD amplifier (configured for a 3-wire PT100)
+- MPU6050 accelerometer/gyroscope
+- Relay or suitable isolated heater-control circuit
+- Buzzer
+- Green status LED and red heating LED
+
+> **Safety:** This firmware may control mains-powered heating hardware. Use proper electrical isolation, grounding, fusing, thermal protection, and appropriately rated components. Firmware must not be the only protection against overheating or electric shock.
+
+## Pin Configuration
+
+| Component | ESP32 pin |
+|---|---:|
+| TFT CS | 15 |
+| TFT reset | 4 |
+| TFT DC | 27 |
+| Touch CS | 5 |
+| SPI MOSI | 23 |
+| SPI clock | 18 |
+| SPI MISO | 19 |
+| MAX31865 CS | 14 |
+| Relay | 26 |
+| Buzzer | 25 |
+| Status LED | 33 |
+| Heating LED | 32 |
+| I2C SDA | 21 |
+| I2C SCL | 22 |
+
+The display, touchscreen, and MAX31865 share the ESP32 hardware SPI bus. The MPU6050 uses I2C.
+
+## Fabric Presets
+
+| Mode | Intended fabric | Target | Maximum |
+|---|---|---:|---:|
+| Casual | Polyester / synthetics | 110 °C | 130 °C |
+| Kente | Traditional fabrics / Ankara | 140 °C | 160 °C |
+| Suits | Formal and office wear | 150 °C | 170 °C |
+| Jeans | Denim and thick cotton | 180 °C | 200 °C |
+| Bedding | Blankets and heavy linen | 200 °C | 220 °C |
+
+These values are project defaults. Validate them against the garment care label, sensor placement, iron construction, and actual hardware before use.
+
+## Software Dependencies
+
+Install ESP32 board support and these Arduino libraries:
+
+- Adafruit GFX Library
+- Adafruit ILI9341
+- XPT2046_Touchscreen
+- MPU6050
+- Adafruit MAX31865
+
+The firmware also uses the standard Arduino `SPI` and `Wire` libraries.
+
+## Build and Upload
+
+1. Open [`firmware_iron/firmware_iron.ino`](firmware_iron/firmware_iron.ino) in the Arduino IDE.
+2. Install the ESP32 board package and the libraries listed above.
+3. Select the correct ESP32 board and serial port.
+4. Confirm that the pin assignments and relay polarity match your hardware.
+5. Compile and upload the sketch.
+6. Open the Serial Monitor at `115200` baud for diagnostic output.
+
+## Operation
+
+At startup, the iron activates in the **Casual** preset. Select a fabric mode on the touchscreen to change the target temperature. The relay switches the heater on below the target temperature minus 3 °C and switches it off once the target is reached.
+
+The system sounds a warning after 20 seconds without touchscreen input and shuts the heater off after 30 seconds. It also shuts down immediately when the selected preset's maximum temperature is reached. Touch the screen to reactivate the iron after shutdown.
+
+## Current Limitation
+
+The firmware reads motion data from the MPU6050 and records the last detected movement, but the automatic inactivity timer currently uses only touchscreen activity. Moving the iron does not reset or prevent the 30-second shutdown. This should be addressed if inactivity is intended to represent both touch and physical use.
+
+## Project Structure
 
 ```text
-Smart Iron/
-├── firmware_iron/
-│   └── firmware_iron.ino        # Monolithic ESP32 sketch (Sensors, Display, Touch, Safety Relay)
-│
-└── smart_iron_app/              # Flutter Mobile Companion Application
-    ├── lib/
-    │   ├── main.dart            # App entry point & Dark Material theme setup
-    │   ├── models/
-    │   │   └── fabric_mode.dart # FabricMode class & 5 fabric preset configurations
-    │   ├── services/
-    │   │   └── iron_websocket_service.dart # Mock hardware simulation engine
-    │   ├── views/
-    │   │   └── wireless_iron_controller.dart # Main dashboard & temperature view
-    │   └── widgets/
-    │       └── shutoff_overlay.dart        # Safety auto-shutoff overlay view
-    └── test/
-        └── widget_test.dart     # Baseline widget test suite
+Smart-Iron/
+├── README.md
+└── firmware_iron/
+    └── firmware_iron.ino
 ```
 
----
+## License
 
-## ⚙️ Original Firmware Operation (`firmware_iron/firmware_iron.ino`)
-
-The original ESP32 firmware operates as a self-contained controller driving a local 320x240 TFT display, temperature sensor, accelerometer, buzzer, and heating relay:
-
-### 1. Hardware Pin Configuration & Bus Setup
-
-- **Master Hardware SPI Bus**: Shared by ILI9341 TFT (`TFT_CS: 15`), XPT2046 Touch Screen (`TOUCH_CS: 5`), and MAX31865 RTD Sensor (`MAX_CS: 14`). All CS pins are driven `HIGH` before initialization to prevent SPI bus contention.
-- **I2C Bus (`Wire.begin(21, 22)`)**: Communicates with the MPU6050 6-axis accelerometer/gyroscope.
-- **Peripherals**:
-  - `RELAY_PIN (26)`: Drives the solid-state / mechanical heating relay.
-  - `BUZZER_PIN (25)`: Piezoelectric buzzer for warning and alert tones.
-  - `LED_STATUS (33)`: Green status LED (Iron Active).
-  - `LED_HEATING (32)`: Red heating LED (Heating element active).
-
-### 2. Fabric Presets & Thermal Target Logic
-
-The firmware defines 5 fabric modes stored in the `fabrics[]` array:
-
-| Fabric Mode | Subtitle / Target Fabric | Target Temp (°C) | Max Safe Temp (°C) | Display Color |
-| :--- | :--- | :---: | :---: | :--- |
-| **Casual** | Polyester / Synthetics | 110°C | 130°C | Cyan |
-| **Kente** | Traditional & Ankara | 140°C | 160°C | Yellow |
-| **Suits** | Formal & Office Wear | 150°C | 170°C | Green |
-| **Jeans** | Denim & Thick Cotton | 180°C | 200°C | Blue |
-| **Bedding** | Blankets & Heavy Linen | 200°C | 220°C | Orange |
-
-### 3. Main Loop Execution Sequence (`loop()`)
-
-Every 300 milliseconds, the firmware executes the following routines:
-
-1. `checkTouch()`: Polls XPT2046 touch panel. If touched, converts ADC coordinates to 320x240 screen coordinates, updates `lastTouchTime = millis()`, and switches `selectedMode` if a fabric button is tapped.
-2. `checkTemperature()`: Samples MAX31865 PT100 RTD sensor (`thermo.temperature()`). Controls relay:
-   - If `currentTemp < targetTemp - 3°C`: Relay turned `HIGH` (Heating ON).
-   - If `currentTemp >= targetTemp`: Relay turned `LOW` (Heating OFF).
-   - If `currentTemp >= maxTemp`: Triggers hard emergency `OVERHEAT!` shutoff.
-3. `checkMotion()`: Reads acceleration vector from MPU6050 (`ax, ay, az`). Computes magnitude `mag`. If magnitude delta exceeds `0.15g`, updates `lastMotionTime = millis()`.
-4. `checkInactivity()`: Compares `millis() - lastTouchTime` against timing thresholds:
-   - At **20 seconds** (`WARNING_TIME`): Emits two warning beeps.
-   - At **30 seconds** (`INACTIVITY_TIMEOUT`): Disables relay (`RELAY_PIN -> LOW`), sounds 5 long alarm beeps, and renders red `!! AUTO SHUTOFF !!` screen on TFT.
-
----
-
-## 📱 Original Mobile App Operation (`smart_iron_app`)
-
-The original Flutter mobile app provides a mock control UI simulating the smart iron hardware:
-
-### 1. Mock Hardware Engine (`iron_websocket_service.dart`)
-
-- Network WebSocket code is commented out in favor of an internal hardware simulation engine.
-- `_hardwareSimulationTimer` (1s periodic): Simulates thermal physics (rapid heating when element is on, natural ambient cooling when target temperature is reached) and increments an inactivity counter.
-- `_mockNetworkTimer` (300ms periodic): Streams simulated JSON state dictionaries (`currentTemp`, `selectedMode`, `ironActive`, `isHeating`, `shutoffReason`, `countdown`) to the UI state handlers.
-
-### 2. User Interface & Controls (`wireless_iron_controller.dart`)
-
-- **Header Card**: Displays current real-time temperature, target temperature, animated progress bar (Red = Heating, Green = At Target), and fabric tip advice.
-- **Inactivity Warning Banner**: Appears when remaining inactivity countdown is 15 seconds or less.
-- **Fabric Grid Selection**: 2-column selectable grid allowing users to switch target fabric modes dynamically.
-- **Auto-Shutoff Screen (`shutoff_overlay.dart`)**: Replaces control panel with emergency warning when `ironActive` is `false` or `shutoffReason` is present. Includes "Tap to Resume Ironing" button.
+No license has been specified for this project.
