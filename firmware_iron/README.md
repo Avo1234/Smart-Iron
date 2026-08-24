@@ -78,7 +78,26 @@ Power-on is accepted only while the TTP223 reports handle contact and both tempe
 
 Touch input is edge-triggered, so holding a button produces only one action until the screen is released. Touches outside valid controls do not affect the handle-presence timer.
 
-The raw touchscreen calibration limits are stored in `config.h` and may need adjustment for the individual panel.
+The display and touchscreen both use rotation `1`. Touch coordinates use verified
+four-point linear calibration values stored in `config.h`:
+
+```text
+SWAP_AXES = true
+xCalM     = 0.094422
+xCalC     = -31.983738
+yCalM     = -0.069217
+yCalC     = 255.422592
+```
+
+With axis swapping enabled, raw `TS_Point.y` is the X input and raw
+`TS_Point.x` is the Y input. Screen coordinates are calculated as:
+
+```text
+x = round(rawX * xCalM + xCalC)
+y = round(rawY * yCalM + yCalC)
+```
+
+The final coordinates are constrained to the 320x240 display area.
 
 ## Handle and Impact Safety
 
@@ -144,6 +163,7 @@ TARGET:115
 ...
 TARGET:170
 STATUS?
+PAIRING:CLEAR
 ```
 
 Command rules:
@@ -154,6 +174,10 @@ Command rules:
 - `TARGET` accepts 110 through 170 in 5-degree steps.
 - Serious faults require local touchscreen acknowledgement.
 - BLE disconnection does not change the current power state.
+- Command and status access requires an encrypted, bonded Secure Connections link using Just Works.
+- Encrypted `PAIRING:CLEAR` is accepted only while power is off, clears all bonds, and disconnects.
+
+Just Works encrypts subsequent bonded connections but does not authenticate initial pairing against an active man-in-the-middle attacker. Pair in a trusted location.
 
 ### Status payload
 
