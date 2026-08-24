@@ -1,8 +1,8 @@
 # Smart Iron
 
-Smart Iron is a safety-focused, temperature-controlled electric iron built around an ESP32-WROOM-32. The complete project combines embedded firmware, local touchscreen controls, handle-presence sensing, relay-based heating control, Bluetooth Low Energy (BLE), and a planned cross-platform mobile application.
+Smart Iron is a safety-focused ESP32-WROOM-32 iron with a Flutter companion app for Android and iOS.
 
-The ESP32 firmware is implemented. The mobile application is planned for a later development phase.
+The ESP32 firmware and first mobile release are implemented. See [smart_iron_app/README.md](smart_iron_app/README.md).
 
 > **Electrical safety:** This project can control mains-powered heating hardware. Use an isolated and correctly rated relay, grounding, fusing, an independent thermal fuse, and suitable enclosures. Firmware must never be the only protection against fire or electric shock. Perform initial testing with the mains heater disconnected.
 
@@ -49,7 +49,7 @@ The firmware controls the sensors, TFT interface, relay, safety state machine, a
 
 ### Cross-platform mobile application
 
-The mobile application has not been implemented yet. It is intended to connect to the ESP32 using BLE and provide:
+The mobile application connects using encrypted bonded BLE and provides:
 
 - Iron status and current-temperature monitoring
 - Fabric preset and target-temperature selection
@@ -59,6 +59,8 @@ The mobile application has not been implemented yet. It is intended to connect t
 - Fault and sensor-health information
 
 Serious safety faults will continue to require acknowledgement on the iron's local touchscreen.
+
+The app includes remembered reconnect, demo mode, safety notifications, and encrypted `PAIRING:CLEAR` while power is off. Just Works encrypts the bonded connection but does not protect initial pairing from an active man-in-the-middle attacker. Background monitoring is best effort.
 
 ## Repository Structure
 
@@ -83,7 +85,7 @@ Smart-Iron/
 | PT100 relay control | Implemented; hardware validation required |
 | MPU6050 impact shutdown | Implemented; threshold calibration required |
 | BLE GATT interface | Implemented in firmware |
-| Cross-platform mobile app | Planned |
+| Cross-platform mobile app | Implemented; physical-device validation required |
 | Full hardware safety testing | Pending |
 | 1,000-cycle reliability testing | Pending |
 
