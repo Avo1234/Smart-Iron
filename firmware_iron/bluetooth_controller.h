@@ -13,9 +13,11 @@ class BluetoothController {
   void enqueueCommand(const uint8_t* data, size_t length);
   void setConnected(bool connected);
   bool isConnected() const;
+  void clearPairingsAndDisconnect();
 
  private:
   BLECharacteristic* statusCharacteristic_ = nullptr;
+  BLEServer* server_ = nullptr;
   char pendingCommand_[40] = {};
   volatile bool commandPending_ = false;
   volatile bool connected_ = false;
