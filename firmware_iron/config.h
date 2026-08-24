@@ -47,10 +47,12 @@ constexpr uint32_t MPU_HEALTH_CHECK_MS = 2000;
 constexpr float IMPACT_THRESHOLD_G = 2.5F;
 constexpr uint32_t IMPACT_CONFIRM_MS = 100;
 
-constexpr int TOUCH_RAW_X_MIN = 200;
-constexpr int TOUCH_RAW_X_MAX = 3700;
-constexpr int TOUCH_RAW_Y_MIN = 240;
-constexpr int TOUCH_RAW_Y_MAX = 3800;
+// Verified four-point XPT2046 calibration for display and touch rotation 1.
+constexpr bool SWAP_AXES = true;
+constexpr float xCalM = 0.094422F;
+constexpr float xCalC = -31.983738F;
+constexpr float yCalM = -0.069217F;
+constexpr float yCalC = 255.422592F;
 
 constexpr char BLE_DEVICE_NAME[] = "SmartIron";
 constexpr char BLE_SERVICE_UUID[] = "7a1d0001-5a7b-4c6d-8e9f-102030405060";
