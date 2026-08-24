@@ -116,6 +116,17 @@ void handleAction(const ControlAction& action, bool remote) {
       break;
     case ControlActionType::REQUEST_STATUS:
       break;
+    case ControlActionType::CLEAR_PAIRINGS:
+      if (state.powerOn) {
+        state.message = "Pairing clear rejected: power off first";
+        alarmController.warning();
+      } else {
+        state.message = "Pairings cleared; reconnect to pair";
+        bluetoothController.publishStatus(state, true);
+        delay(150);
+        bluetoothController.clearPairingsAndDisconnect();
+      }
+      break;
     case ControlActionType::INVALID:
       state.message = "Rejected invalid BLE command";
       alarmController.warning();
