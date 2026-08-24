@@ -2,6 +2,8 @@
 
 #include <BLE2902.h>
 #include <BLEServer.h>
+#include <BLESecurity.h>
+#include <esp_gap_ble_api.h>
 #include <cstring>
 
 #include "config.h"
@@ -35,18 +37,26 @@ class ServerCallbacks : public BLEServerCallbacks {
 void BluetoothController::begin() {
   controllerInstance = this;
   BLEDevice::init(Config::BLE_DEVICE_NAME);
-  BLEServer* server = BLEDevice::createServer();
-  server->setCallbacks(new ServerCallbacks());
-  BLEService* service = server->createService(Config::BLE_SERVICE_UUID);
+  server_ = BLEDevice::createServer();
+  server_->setCallbacks(new ServerCallbacks());
+  BLEService* service = server_->createService(Config::BLE_SERVICE_UUID);
 
   BLECharacteristic* command = service->createCharacteristic(
       Config::BLE_COMMAND_UUID, BLECharacteristic::PROPERTY_WRITE);
+  command->setAccessPermissions(ESP_GATT_PERM_WRITE_ENCRYPTED);
   command->setCallbacks(new CommandCallbacks());
 
   statusCharacteristic_ = service->createCharacteristic(
       Config::BLE_STATUS_UUID,
       BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   statusCharacteristic_->addDescriptor(new BLE2902());
+  statusCharacteristic_->setAccessPermissions(
+      ESP_GATT_PERM_READ_ENCRYPTED | ESP_GATT_PERM_WRITE_ENCRYPTED);
+
+  BLESecurity* security = new BLESecurity();
+  security->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_BOND);
+  security->setCapability(ESP_IO_CAP_NONE);
+  security->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
 
   service->start();
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
@@ -118,6 +128,7 @@ ControlAction BluetoothController::parseCommand(String command) {
   if (command == "POWER:ON") return {ControlActionType::POWER_ON, 0};
   if (command == "POWER:OFF") return {ControlActionType::POWER_OFF, 0};
   if (command == "STATUS?") return {ControlActionType::REQUEST_STATUS, 0};
+  if (command == "PAIRING:CLEAR") return {ControlActionType::CLEAR_PAIRINGS, 0};
 
   if (command.startsWith("PRESET:")) {
     const String value = command.substring(7);
@@ -136,4 +147,9 @@ ControlAction BluetoothController::parseCommand(String command) {
                : ControlAction{ControlActionType::INVALID, 0};
   }
   return {ControlActionType::INVALID, 0};
+}
+
+void BluetoothController::clearPairingsAndDisconnect() {
+  BLEDevice::deleteAllBonds();
+  if (server_ != nullptr && connected_) server_->disconnect(server_->getConnId());
 }
