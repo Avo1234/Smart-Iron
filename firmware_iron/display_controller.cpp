@@ -200,12 +200,12 @@ bool DisplayController::readNewPress(int& x, int& y) {
   wasTouched_ = true;
 
   const TS_Point point = touch_.getPoint();
-  x = constrain(map(point.x, Config::TOUCH_RAW_X_MIN, Config::TOUCH_RAW_X_MAX,
-                    0, 319),
-                0, 319);
-  y = constrain(map(point.y, Config::TOUCH_RAW_Y_MIN, Config::TOUCH_RAW_Y_MAX,
-                    0, 239),
-                0, 239);
+  const int16_t rawX = Config::SWAP_AXES ? point.y : point.x;
+  const int16_t rawY = Config::SWAP_AXES ? point.x : point.y;
+  const int calibratedX = lroundf(rawX * Config::xCalM + Config::xCalC);
+  const int calibratedY = lroundf(rawY * Config::yCalM + Config::yCalC);
+  x = constrain(calibratedX, 0, 319);
+  y = constrain(calibratedY, 0, 239);
   return true;
 }
 
