@@ -63,6 +63,7 @@ enum class ControlActionType : uint8_t {
   SET_TARGET,
   ACKNOWLEDGE_FAULT,
   REQUEST_STATUS,
+  CLEAR_PAIRINGS,
   INVALID
 };
 
