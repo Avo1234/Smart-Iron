@@ -4,6 +4,7 @@
 #include <BLEServer.h>
 #include <BLESecurity.h>
 #include <esp_gap_ble_api.h>
+#include <cstdlib>
 #include <cstring>
 
 #include "config.h"
@@ -11,6 +12,8 @@
 
 namespace {
 BluetoothController* controllerInstance = nullptr;
+constexpr uint16_t PREFERRED_BLE_MTU = 247;
+constexpr uint16_t DEFAULT_BLE_MTU = 23;
 
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
@@ -31,12 +34,21 @@ class ServerCallbacks : public BLEServerCallbacks {
     if (controllerInstance != nullptr) controllerInstance->setConnected(false);
     BLEDevice::startAdvertising();
   }
+
+  void onMtuChanged(BLEServer*, esp_ble_gatts_cb_param_t* param) override {
+    Serial.printf("BLE negotiated MTU: %u (notification payload: %u bytes)\n",
+                  param->mtu.mtu, param->mtu.mtu - 3);
+  }
 };
 }  // namespace
 
 void BluetoothController::begin() {
   controllerInstance = this;
   BLEDevice::init(Config::BLE_DEVICE_NAME);
+  const esp_err_t mtuResult = BLEDevice::setMTU(PREFERRED_BLE_MTU);
+  if (mtuResult != ESP_OK) {
+    Serial.printf("Failed to set BLE local MTU: %d\n", mtuResult);
+  }
   server_ = BLEDevice::createServer();
   server_->setCallbacks(new ServerCallbacks());
   BLEService* service = server_->createService(Config::BLE_SERVICE_UUID);
@@ -89,9 +101,9 @@ void BluetoothController::publishStatus(const AppState& state, bool force) {
       isfinite(state.currentTemperatureC) ? state.currentTemperatureC : -999.0F;
   const int preset =
       state.selectedPreset < FABRIC_MODE_COUNT ? state.selectedPreset : -1;
-  snprintf(payload, sizeof(payload),
+  const int payloadLength = snprintf(payload, sizeof(payload),
            "{\"power\":%s,\"heating\":%s,\"temperature\":%.1f,"
-           "\"target\":%d,\"preset\":%u,\"handle\":%s,\"countdown\":%lu,"
+            "\"target\":%d,\"preset\":%d,\"handle\":%s,\"countdown\":%lu,"
            "\"fault\":\"%s\",\"temperatureSensor\":%s,\"mpu\":%s,"
            "\"message\":\"%s\"}",
            state.powerOn ? "true" : "false",
@@ -102,9 +114,38 @@ void BluetoothController::publishStatus(const AppState& state, bool force) {
            shutdownReasonText(state.shutdownReason),
            state.temperatureSensorHealthy ? "true" : "false",
            state.mpuHealthy ? "true" : "false", state.message.c_str());
+  if (payloadLength < 0 ||
+      static_cast<size_t>(payloadLength) >= sizeof(payload)) {
+    Serial.println("BLE status JSON exceeded its 260-byte buffer");
+    return;
+  }
+
+  if (!connected_) {
+    statusCharacteristic_->setValue(
+        reinterpret_cast<uint8_t*>(payload), payloadLength);
+    return;
+  }
+
+  uint16_t peerMtu = DEFAULT_BLE_MTU;
+  if (server_ != nullptr) {
+    const uint16_t negotiatedMtu = server_->getPeerMTU(server_->getConnId());
+    if (negotiatedMtu >= DEFAULT_BLE_MTU) peerMtu = negotiatedMtu;
+  }
+  const size_t maximumChunkLength = peerMtu - 3;
+  size_t offset = 0;
+  while (offset < static_cast<size_t>(payloadLength)) {
+    const size_t remaining = payloadLength - offset;
+    const size_t chunkLength = min(remaining, maximumChunkLength);
+    statusCharacteristic_->setValue(
+        reinterpret_cast<uint8_t*>(payload + offset), chunkLength);
+    statusCharacteristic_->notify();
+    offset += chunkLength;
+    if (offset < static_cast<size_t>(payloadLength)) delay(3);
+  }
+
+  // Keep the readable value as a complete status object between notifications.
   statusCharacteristic_->setValue(
-      reinterpret_cast<uint8_t*>(payload), strlen(payload));
-  if (connected_) statusCharacteristic_->notify();
+      reinterpret_cast<uint8_t*>(payload), payloadLength);
 }
 
 void BluetoothController::enqueueCommand(const uint8_t* data, size_t length) {
@@ -150,6 +191,19 @@ ControlAction BluetoothController::parseCommand(String command) {
 }
 
 void BluetoothController::clearPairingsAndDisconnect() {
-  BLEDevice::deleteAllBonds();
+  int bondCount = esp_ble_get_bond_device_num();
+  if (bondCount > 0) {
+    auto* bondedDevices = static_cast<esp_ble_bond_dev_t*>(
+        malloc(sizeof(esp_ble_bond_dev_t) * bondCount));
+    if (bondedDevices != nullptr) {
+      int listedBonds = bondCount;
+      if (esp_ble_get_bond_device_list(&listedBonds, bondedDevices) == ESP_OK) {
+        for (int i = 0; i < listedBonds; ++i) {
+          esp_ble_remove_bond_device(bondedDevices[i].bd_addr);
+        }
+      }
+      free(bondedDevices);
+    }
+  }
   if (server_ != nullptr && connected_) server_->disconnect(server_->getConnId());
 }
