@@ -24,6 +24,7 @@ class IronController extends ChangeNotifier {
   StreamSubscription? _statusSub;
   StreamSubscription? _scanSub;
   Timer? _pendingTimer;
+  Timer? _statusTimer;
   TransportConnectionState connection = TransportConnectionState.disconnected;
   IronStatus? status;
   final List<IronDevice> devices = [];
@@ -53,8 +54,21 @@ class IronController extends ChangeNotifier {
           alerts.disconnectedWhileActive(enabled: alertsEnabled);
         }
         connection = state;
+        if (state == TransportConnectionState.connected && status == null) {
+          _statusTimer?.cancel();
+          _statusTimer = Timer(const Duration(seconds: 8), () {
+            if (connected && status == null) {
+              error = 'Connected, but the iron did not provide status.';
+              notifyListeners();
+              unawaited(disconnect());
+            }
+          });
+        }
         if (state == TransportConnectionState.disconnected) {
-          _clearPending('Connection lost');
+          _statusTimer?.cancel();
+          if (pendingCommand != null) {
+            _clearPending(error ?? 'Connection lost');
+          }
         }
         notifyListeners();
       },
@@ -69,6 +83,7 @@ class IronController extends ChangeNotifier {
           final next = IronStatus.fromJsonString(value);
           alerts.evaluate(status, next, enabled: alertsEnabled);
           status = next;
+          _statusTimer?.cancel();
           error = null;
           _confirmPending(next);
         } catch (e) {
@@ -114,6 +129,8 @@ class IronController extends ChangeNotifier {
 
   Future<void> connect(String id) async {
     error = null;
+    status = null;
+    notifyListeners();
     try {
       await _transport.connect(id);
       rememberedDeviceId = id;
@@ -201,6 +218,7 @@ class IronController extends ChangeNotifier {
   @override
   void dispose() {
     _pendingTimer?.cancel();
+    _statusTimer?.cancel();
     _scanSub?.cancel();
     _connectionSub?.cancel();
     _statusSub?.cancel();
