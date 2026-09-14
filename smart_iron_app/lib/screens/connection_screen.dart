@@ -105,7 +105,15 @@ class ConnectionScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.iron, size: 48, color: AppColors.textDark),
+                  child: ClipOval(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Image.asset(
+                        'assets/icon/app_icon.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
                 ),
                 Positioned(
                   bottom: 0,
