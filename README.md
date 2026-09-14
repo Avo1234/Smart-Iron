@@ -76,14 +76,14 @@ Smart-Iron/
 
 | Area | Status |
 |---|---|
-| Modular ESP32 firmware | Implemented |
-| XPT2046 local controls | Implemented |
-| TTP223 handle sensing | Implemented in firmware; hardware validation required |
-| PT100 relay control | Implemented; hardware validation required |
-| MPU6050 impact shutdown | Implemented; threshold calibration required |
+| Modular ESP32 firmware | Implemented & Bench Tested |
+| XPT2046 local controls | Implemented & Bench Tested |
+| TTP223 handle sensing | Implemented & Bench Tested |
+| PT100 relay control | Implemented & Bench Tested |
+| MPU6050 impact shutdown | Implemented & Bench Tested |
 | BLE GATT interface | Implemented and validated with Android at MTU 247 |
-| Android mobile app | Implemented and tested on a physical Android 7.1.1 phone |
-| Full hardware safety testing | Pending |
+| Android mobile app | Implemented, redesigned (Stitch UI), and physically tested |
+| Full hardware safety bench testing | Completed |
 | 1,000-cycle reliability testing | Pending |
 
 ## Roadmap
