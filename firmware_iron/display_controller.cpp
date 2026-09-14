@@ -58,8 +58,38 @@ ControlAction DisplayController::pollAction(const AppState& state) {
   return {};
 }
 
+void DisplayController::recoverDisplay(const AppState& state) {
+  digitalWrite(Config::TOUCH_CS, HIGH);
+  digitalWrite(Config::MAX31865_CS, HIGH);
+  tft_.begin();
+  tft_.setRotation(1);
+  staticLayoutDrawn_ = false;
+  render(state, true);
+}
+
 void DisplayController::render(const AppState& state, bool force) {
   const uint32_t now = millis();
+
+  if (state.heating != lastHeatingState_) {
+    lastHeatingState_ = state.heating;
+    digitalWrite(Config::TOUCH_CS, HIGH);
+    digitalWrite(Config::MAX31865_CS, HIGH);
+    tft_.begin();
+    tft_.setRotation(1);
+    staticLayoutDrawn_ = false;
+    force = true;
+  }
+
+  if (now - lastFullRefreshMs_ >= 15000) {
+    lastFullRefreshMs_ = now;
+    digitalWrite(Config::TOUCH_CS, HIGH);
+    digitalWrite(Config::MAX31865_CS, HIGH);
+    tft_.begin();
+    tft_.setRotation(1);
+    staticLayoutDrawn_ = false;
+    force = true;
+  }
+
   if (!force && now - lastRenderMs_ < Config::DISPLAY_REFRESH_MS) return;
   lastRenderMs_ = now;
 

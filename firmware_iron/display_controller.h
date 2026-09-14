@@ -11,6 +11,7 @@ class DisplayController {
   void begin();
   ControlAction pollAction(const AppState& state);
   void render(const AppState& state, bool force = false);
+  void recoverDisplay(const AppState& state);
 
  private:
   Adafruit_ILI9341 tft_;
@@ -18,6 +19,8 @@ class DisplayController {
   bool wasTouched_ = false;
   bool staticLayoutDrawn_ = false;
   bool lastFaultState_ = false;
+  bool lastHeatingState_ = false;
+  uint32_t lastFullRefreshMs_ = 0;
   AppState lastState_;
   uint32_t lastRenderMs_ = 0;
 
