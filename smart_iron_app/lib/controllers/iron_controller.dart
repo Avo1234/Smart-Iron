@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
 import '../models/iron_device.dart';
@@ -8,6 +7,26 @@ import '../services/alert_service.dart';
 import '../services/ble_transport.dart';
 import '../services/iron_protocol.dart';
 import '../services/settings_service.dart';
+
+class TelemetryPoint {
+  final DateTime timestamp;
+  final double? temperature;
+  final int target;
+  final bool heating;
+  final bool power;
+  final bool handle;
+  final String fault;
+
+  const TelemetryPoint({
+    required this.timestamp,
+    required this.temperature,
+    required this.target,
+    required this.heating,
+    required this.power,
+    required this.handle,
+    required this.fault,
+  });
+}
 
 class IronController extends ChangeNotifier {
   IronController(
@@ -25,9 +44,11 @@ class IronController extends ChangeNotifier {
   StreamSubscription? _scanSub;
   Timer? _pendingTimer;
   Timer? _statusTimer;
+  DateTime? _lastTelemetrySampleTime;
   TransportConnectionState connection = TransportConnectionState.disconnected;
   IronStatus? status;
   final List<IronDevice> devices = [];
+  final List<TelemetryPoint> telemetryHistory = [];
   bool scanning = false;
   bool demoMode = false;
   bool alertsEnabled = true;
@@ -83,6 +104,7 @@ class IronController extends ChangeNotifier {
           final next = IronStatus.fromJsonString(value);
           alerts.evaluate(status, next, enabled: alertsEnabled);
           status = next;
+          _recordTelemetry(next);
           _statusTimer?.cancel();
           error = null;
           _confirmPending(next);
@@ -96,6 +118,28 @@ class IronController extends ChangeNotifier {
         notifyListeners();
       },
     );
+  }
+
+  void _recordTelemetry(IronStatus status) {
+    final now = DateTime.now();
+    if (_lastTelemetrySampleTime == null ||
+        now.difference(_lastTelemetrySampleTime!) >= const Duration(seconds: 5)) {
+      _lastTelemetrySampleTime = now;
+      telemetryHistory.add(
+        TelemetryPoint(
+          timestamp: now,
+          temperature: status.temperature,
+          target: status.target,
+          heating: status.heating,
+          power: status.power,
+          handle: status.handle,
+          fault: status.fault,
+        ),
+      );
+      if (telemetryHistory.length > 300) {
+        telemetryHistory.removeAt(0);
+      }
+    }
   }
 
   Future<void> startScan() async {
@@ -130,6 +174,8 @@ class IronController extends ChangeNotifier {
   Future<void> connect(String id) async {
     error = null;
     status = null;
+    telemetryHistory.clear();
+    _lastTelemetrySampleTime = null;
     notifyListeners();
     try {
       await _transport.connect(id);
@@ -200,6 +246,8 @@ class IronController extends ChangeNotifier {
     await settings.forgetDevice();
     rememberedDeviceId = null;
     status = null;
+    telemetryHistory.clear();
+    _lastTelemetrySampleTime = null;
     notifyListeners();
   }
 
